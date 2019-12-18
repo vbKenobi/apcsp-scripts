@@ -1,0 +1,59 @@
+#!/bin/bash
+
+#get ip address of host
+IP_ADDRESS=$(hostname -I)
+
+IP_START=${IP_ADDRESS%.*}
+echo "ip_start = " $IP_START
+
+NUM_IPS="1"
+while [ "$NUM_IPS" -lt 255 ] ; do
+
+    temp_ip="$IP_START.$NUM_IPS"
+    #echo "$temp_ip"
+
+    ping -c 1 -i 1 "$temp_ip" &>/dev/null
+
+    # if the machine is alive, get additional info
+    if [ "$?" -eq 0 ] ; then
+
+       nc -zv -w 1 "$temp_ip" 22 &>/dev/null
+       if [ "$?" -eq 0 ] ; then
+          OPEN_PORTS=" ssh "
+       fi
+
+       nc -zv -w 1 "$temp_ip" 80 &>/dev/null
+       if [ "$?" -eq 0 ] ; then
+          OPEN_PORTS+=" http "
+       fi
+       #echo "open ports = "$OPEN_PORTS
+
+       HOST_NAME=$(host "$temp_ip")
+       SHORT_HOST_NAME=$(echo "$HOST_NAME" | awk '{print $5}')
+       #echo "$SHORT_HOST_NAME"
+
+       mac_addr_file="/proc/net/arp"
+       #echo "get_mac_addr for $temp_ip"
+
+       while IFS= read -r line; do
+          file_ip_addr=$(echo "$line" | awk '{print $1}')
+
+          if [[ "$temp_ip" == "$file_ip_addr" ]]; then
+             mac_hw_addr=$(echo "$line" | awk '{print $4}')
+             #echo "mac_hw_addr = $mac_hw_addr"
+          fi
+       done < "$mac_addr_file"
+       echo "host_name = $SHORT_HOST_NAME ip_addr = $temp_ip mac_addr = $mac_hw_addr open_ports = $OPEN_PORTS"
+
+    else
+      echo "$temp_ip is dead"
+    fi
+
+    let NUM_IPS="$NUM_IPS + 1"
+    OPEN_PORTS=""
+    SHORT_HOST_NAME=""
+    mac_hw_addr=""
+done
+
+exit 0
+
